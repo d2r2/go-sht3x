@@ -407,16 +407,16 @@ func (v *SHT3X) ReadUncompTemperatureAndHumidity(i2c *i2c.I2C,
 	return data[0], data[1], nil
 }
 
-// ReadTemperatureAndHumidity returns humidity and
+// ReadTemperatureAndRelativeHumidity returns humidity and
 // temperature obtained from sensor in "single shot mode".
-func (v *SHT3X) ReadTemperatureAndHumidity(i2c *i2c.I2C,
+func (v *SHT3X) ReadTemperatureAndRelativeHumidity(i2c *i2c.I2C,
 	precision MeasureRepeatability) (float32, float32, error) {
 
 	ut, urh, err := v.ReadUncompTemperatureAndHumidity(i2c, precision)
 	if err != nil {
 		return 0, 0, err
 	}
-	lg.Debugf("Temperature and RH uncompensated = %v, %v", ut, urh)
+	lg.Debugf("Temperature and humidity uncompensated = %v, %v", ut, urh)
 	temp := v.uncompTemperatureToCelsius(ut)
 	rh := v.uncompHumidityToRelativeHumidity(urh)
 	return temp, rh, nil
@@ -587,22 +587,22 @@ func (v *SHT3X) FetchUncompTemperatureAndHumidityWithContext(parent context.Cont
 	return data[0], data[1], nil
 }
 
-// FetchTemperatureAndHumidity wait for uncompensated temperature
+// FetchTemperatureAndRelativeHumidity wait for uncompensated temperature
 // and humidity values and convert them to float values (celcius and related humidity).
-func (v *SHT3X) FetchTemperatureAndHumidity(i2c *i2c.I2C,
+func (v *SHT3X) FetchTemperatureAndRelativeHumidity(i2c *i2c.I2C,
 	period PeriodicMeasure) (float32, float32, error) {
 	// Create default context
 	ctx := context.Background()
 	// Reroute call
-	return v.FetchTemperatureAndHumidityWithContext(ctx,
+	return v.FetchTemperatureAndRelativeHumidityWithContext(ctx,
 		i2c, period)
 }
 
-// FetchTemperatureAndHumidityWithContext wait for uncompensated temperature
+// FetchTemperatureAndRelativeHumidityWithContext wait for uncompensated temperature
 // and humidity values and convert them to float values (celcius and related humidity).
 // Use context parameter, since operation is time consuming
 // (can take up to 2 seconds, waiting for results).
-func (v *SHT3X) FetchTemperatureAndHumidityWithContext(parent context.Context,
+func (v *SHT3X) FetchTemperatureAndRelativeHumidityWithContext(parent context.Context,
 	i2c *i2c.I2C, period PeriodicMeasure) (float32, float32, error) {
 
 	ut, urh, err := v.FetchUncompTemperatureAndHumidityWithContext(parent, i2c, period)

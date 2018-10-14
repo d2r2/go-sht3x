@@ -28,7 +28,8 @@ func main() {
 	defer i2c.Close()
 
 	sensor := sht3x.NewSHT3X()
-	temp, rh, err := sensor.ReadTemperatureAndHumidity(i2c, sht3x.REPEATABILITY_LOW)
+
+	temp, rh, err := sensor.ReadTemperatureAndRelativeHumidity(i2c, sht3x.REPEATABILITY_LOW)
 	if err != nil {
 		log.Fatal(err)
 	}

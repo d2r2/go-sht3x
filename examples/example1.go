@@ -80,7 +80,7 @@ func main() {
 	}
 	lg.Infof("Temprature and RH uncompensated = %v, %v", ut, urh)
 
-	temp, rh, err := sensor.ReadTemperatureAndHumidity(i2c, sht3x.REPEATABILITY_LOW)
+	temp, rh, err := sensor.ReadTemperatureAndRelativeHumidity(i2c, sht3x.REPEATABILITY_LOW)
 	if err != nil {
 		lg.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func main() {
 		lg.Fatal(err)
 	}
 	for i := 0; i < 5; i++ {
-		temp, rh, err := sensor.FetchTemperatureAndHumidityWithContext(context.Background(), i2c, period)
+		temp, rh, err := sensor.FetchTemperatureAndRelativeHumidityWithContext(context.Background(), i2c, period)
 		if err != nil {
 			lg.Fatal(err)
 		}
@@ -214,7 +214,7 @@ func main() {
 		lg.Fatal(err)
 	}
 	lg.Infof("Heater ON status = %v", hs)
-	temp, rh, err = sensor.ReadTemperatureAndHumidity(i2c, sht3x.REPEATABILITY_LOW)
+	temp, rh, err = sensor.ReadTemperatureAndRelativeHumidity(i2c, sht3x.REPEATABILITY_LOW)
 	if err != nil {
 		lg.Fatal(err)
 	}
