@@ -6,8 +6,8 @@ Sensirion SHT3x relative humidity and temperature sensor's family
 [![GoDoc](https://godoc.org/github.com/d2r2/go-sht3x?status.svg)](https://godoc.org/github.com/d2r2/go-sht3x)
 [![MIT License](http://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-SHT30, SHT31, SHT35 ([pdf reference](https://raw.github.com/d2r2/go-si7021/master/docs/Si7021-A20.pdf)) high accuracy temperature and relative humidity sensor. Easily integrated with Arduino and Raspberry PI via i2c communication interface:
-![image](https://raw.github.com/d2r2/go-si7021/master/docs/Si7021_GY-21.jpg)
+SHT30, SHT31, SHT35 ([general specification](https://raw.github.com/d2r2/go-sht3x/master/docs/Sensirion_Humidity_Sensors_SHT3x_Datasheet_digital.pdf), [alert mode specification](https://raw.github.com/d2r2/go-sht3x/master/docs/Sensirion_Humidity_Sensors_SHT3x_Application_Note_Alert_Mode_DIS.pdf)) high accuracy temperature and relative humidity sensor. Easily integrated with Arduino and Raspberry PI via i2c communication interface:
+![image](https://raw.github.com/d2r2/go-sht3x/master/docs/SHT3X.jpg)
 
 This sensor has extra feature - integrated heater which could be helpfull in some specific application (such as periodic condensate removal, for example).
 
@@ -19,9 +19,9 @@ Golang usage
 
 ```go
 func main() {
-	// Create new connection to i2c-bus on 1 line with address 0x40.
+	// Create new connection to i2c-bus on 0 line with address 0x44.
 	// Use i2cdetect utility to find device address over the i2c-bus
-	i2c, err := i2c.NewI2C(0x44, 1)
+	i2c, err := i2c.NewI2C(0x44, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
