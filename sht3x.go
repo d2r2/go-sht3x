@@ -149,7 +149,7 @@ func (v StatusRegFlag) String() string {
 	return buf.String()
 }
 
-// PeriodicMeasure identify pause between subsiquent measures
+// PeriodicMeasure identify pause between subsequent measures
 // in "periodic data acquisition" mode.
 type PeriodicMeasure int
 
