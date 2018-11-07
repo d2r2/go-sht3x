@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"reflect"
 	"time"
 
 	i2c "github.com/d2r2/go-i2c"
@@ -70,34 +71,34 @@ var (
 type MeasureRepeatability int
 
 const (
-	REPEATABILITY_LOW    MeasureRepeatability = iota + 1 // Low precision
-	REPEATABILITY_MEDIUM                                 // Medium precision
-	REPEATABILITY_HIGH                                   // High precision
+	RepeatabilityLow    MeasureRepeatability = iota + 1 // Low precision
+	RepeatabilityMedium                                 // Medium precision
+	RepeatabilityHigh                                   // High precision
 )
 
 // String define stringer interface.
 func (v MeasureRepeatability) String() string {
 	switch v {
-	case REPEATABILITY_LOW:
+	case RepeatabilityLow:
 		return "Measure Repeatability Low"
-	case REPEATABILITY_MEDIUM:
+	case RepeatabilityMedium:
 		return "Measure Repeatability Medium"
-	case REPEATABILITY_HIGH:
+	case RepeatabilityHigh:
 		return "Measure Repeatability High"
 	default:
 		return "<unknown>"
 	}
 }
 
-// GetWorstMeasureTime define how long to wait for the measure process
+// GetMeasureTime define how long to wait for the measure process
 // to complete according to specification.
-func (v MeasureRepeatability) GetWorstMeasureTime() time.Duration {
+func (v MeasureRepeatability) GetMeasureTime() time.Duration {
 	switch v {
-	case REPEATABILITY_LOW:
+	case RepeatabilityLow:
 		return 4500 * time.Microsecond
-	case REPEATABILITY_MEDIUM:
+	case RepeatabilityMedium:
 		return 6500 * time.Microsecond
-	case REPEATABILITY_HIGH:
+	case RepeatabilityHigh:
 		return 15500 * time.Microsecond
 	default:
 		return 0
@@ -154,44 +155,44 @@ func (v StatusRegFlag) String() string {
 type PeriodicMeasure int
 
 const (
-	PERIODIC_05MPS PeriodicMeasure = iota + 1 // 1 measurement per each 2 seconds
-	PERIODIC_1MPS                             // 1 measurement per second
-	PERIODIC_2MPS                             // 2 measurements per second
-	PERIODIC_4MPS                             // 4 measurements per second
-	PERIODIC_10MPS                            // 10 measurements per second
+	PeriodicHalfMPS PeriodicMeasure = iota + 1 // 1 measurement per each 2 seconds
+	Periodic1MPS                               // 1 measurement per second
+	Periodic2MPS                               // 2 measurements per second
+	Periodic4MPS                               // 4 measurements per second
+	Periodic10MPS                              // 10 measurements per second
 )
 
 // String define stringer interface.
 func (v PeriodicMeasure) String() string {
 	switch v {
-	case PERIODIC_05MPS:
+	case PeriodicHalfMPS:
 		return "Periodic Measurement 0.5 MPS"
-	case PERIODIC_1MPS:
+	case Periodic1MPS:
 		return "Periodic Measurement 1 MPS"
-	case PERIODIC_2MPS:
+	case Periodic2MPS:
 		return "Periodic Measurement 2 MPS"
-	case PERIODIC_4MPS:
+	case Periodic4MPS:
 		return "Periodic Measurement 4 MPS"
-	case PERIODIC_10MPS:
+	case Periodic10MPS:
 		return "Periodic Measurement 10 MPS"
 	default:
 		return "<unknown>"
 	}
 }
 
-// GetDuration identify pause between measures depending on PeriodicMeasure value.
-func (v PeriodicMeasure) GetDuration() time.Duration {
+// GetWaitDuration identify pause between measures depending on PeriodicMeasure value.
+func (v PeriodicMeasure) GetWaitDuration() time.Duration {
 	var timeDur time.Duration
 	switch v {
-	case PERIODIC_05MPS:
+	case PeriodicHalfMPS:
 		timeDur = time.Millisecond * 2000
-	case PERIODIC_1MPS:
+	case Periodic1MPS:
 		timeDur = time.Millisecond * 1000
-	case PERIODIC_2MPS:
+	case Periodic2MPS:
 		timeDur = time.Millisecond * 500
-	case PERIODIC_4MPS:
+	case Periodic4MPS:
 		timeDur = time.Millisecond * 250
-	case PERIODIC_10MPS:
+	case Periodic10MPS:
 		timeDur = time.Millisecond * 100
 	}
 	return timeDur
@@ -200,6 +201,9 @@ func (v PeriodicMeasure) GetDuration() time.Duration {
 // SHT3X is a sensor itself.
 type SHT3X struct {
 	lastStatusReg *uint16
+	lastCmd       []byte
+	lastPeriodic  PeriodicMeasure
+	lastPrecision MeasureRepeatability
 }
 
 // NewSHT3X return new sensor instance.
@@ -261,11 +265,13 @@ func (v *SHT3X) readDataWithCRCCheck(i2c *i2c.I2C, blockCount int) ([]uint16, er
 // Reset reboot a sensor.
 func (v *SHT3X) Reset(i2c *i2c.I2C) error {
 	lg.Debug("Reset sensor...")
-	_, err := i2c.WriteBytes(CMD_RESET)
+	cmd := CMD_RESET
+	_, err := i2c.WriteBytes(cmd)
 	if err != nil {
 		return err
 	}
-	// Powerup time from specification
+	v.lastCmd = cmd
+	// Power-up time from specification
 	time.Sleep(time.Microsecond * 1500)
 	return nil
 }
@@ -283,6 +289,7 @@ func (v *SHT3X) SetHeaterStatus(i2c *i2c.I2C, enableHeater bool) error {
 	if err != nil {
 		return err
 	}
+	v.lastCmd = cmd
 	// No conversion time defined in docs for this command,
 	// but error thrown out, if no any pause provided.
 	time.Sleep(time.Millisecond * 1)
@@ -357,7 +364,7 @@ func (v *SHT3X) CheckCommandFailed(i2c *i2c.I2C) (bool, error) {
 
 // CheckWrittedChecksumIsIncorrect return last command status: not correct (true) correct (false).
 func (v *SHT3X) CheckWrittenChecksumIsIncorrect(i2c *i2c.I2C) (bool, error) {
-	lg.Debug("Checking last writted data checksum status...")
+	lg.Debug("Checking last written data checksum status...")
 	v.lastStatusReg = nil
 	ur, err := v.ReadStatusReg(i2c)
 	if err != nil {
@@ -374,8 +381,10 @@ func (v *SHT3X) initiateMeasure(i2c *i2c.I2C, cmd []byte,
 	if err != nil {
 		return err
 	}
+	v.lastCmd = cmd
+
 	// Wait according to conversion time specification
-	pause := precision.GetWorstMeasureTime()
+	pause := precision.GetMeasureTime()
 	time.Sleep(pause)
 	return nil
 }
@@ -385,14 +394,14 @@ func (v *SHT3X) initiateMeasure(i2c *i2c.I2C, cmd []byte,
 func (v *SHT3X) ReadUncompTemperatureAndHumidity(i2c *i2c.I2C,
 	precision MeasureRepeatability) (uint16, uint16, error) {
 
-	lg.Debug("Measuring temprature and humidity...")
+	lg.Debug("Measuring temperature and humidity...")
 	var cmd []byte
 	switch precision {
-	case REPEATABILITY_LOW:
+	case RepeatabilityLow:
 		cmd = CMD_SINGLE_MEASURE_LOW
-	case REPEATABILITY_MEDIUM:
+	case RepeatabilityMedium:
 		cmd = CMD_SINGLE_MEASURE_MEDIUM
-	case REPEATABILITY_HIGH:
+	case RepeatabilityHigh:
 		cmd = CMD_SINGLE_MEASURE_HIGH
 	}
 	err := v.initiateMeasure(i2c, cmd, precision)
@@ -429,7 +438,7 @@ func (v *SHT3X) uncompHumidityToRelativeHumidity(uh uint16) float32 {
 	return rh2
 }
 
-// Convert uncompensated temperature to celsius value.
+// Convert uncompensated temperature to Celsius value.
 func (v *SHT3X) uncompTemperatureToCelsius(ut uint16) float32 {
 	temp := float32(ut)*175/(0x10000-1) - 45
 	temp2 := round32(temp, 2)
@@ -442,10 +451,68 @@ func (v *SHT3X) relativeHumidityToUncompHimidity(rh float32) uint16 {
 	return uh
 }
 
-// Reverse conversion of celsius to uncompensated temperature.
+// Reverse conversion of Celsius to uncompensated temperature.
 func (v *SHT3X) celsiusToUncompTemperature(celsius float32) uint16 {
 	ut := uint16((celsius + 45) * (0x10000 - 1) / 175)
 	return ut
+}
+
+// Select proper periodic measurement command depending on
+// PeriodicMeasure and MeasureRepeatability parameters.
+func (v *SHT3X) getPeriodicMeasurementCommand(period PeriodicMeasure,
+	precision MeasureRepeatability) []byte {
+
+	var cmd []byte
+
+	switch period {
+	case PeriodicHalfMPS:
+		switch precision {
+		case RepeatabilityLow:
+			cmd = CMD_PERIOD_MEASURE_05MPS_LOW
+		case RepeatabilityMedium:
+			cmd = CMD_PERIOD_MEASURE_05MPS_MEDIUM
+		case RepeatabilityHigh:
+			cmd = CMD_PERIOD_MEASURE_05MPS_HIGH
+		}
+	case Periodic1MPS:
+		switch precision {
+		case RepeatabilityLow:
+			cmd = CMD_PERIOD_MEASURE_1MPS_LOW
+		case RepeatabilityMedium:
+			cmd = CMD_PERIOD_MEASURE_1MPS_MEDIUM
+		case RepeatabilityHigh:
+			cmd = CMD_PERIOD_MEASURE_1MPS_HIGH
+		}
+	case Periodic2MPS:
+		switch precision {
+		case RepeatabilityLow:
+			cmd = CMD_PERIOD_MEASURE_2MPS_LOW
+		case RepeatabilityMedium:
+			cmd = CMD_PERIOD_MEASURE_2MPS_MEDIUM
+		case RepeatabilityHigh:
+			cmd = CMD_PERIOD_MEASURE_2MPS_HIGH
+		}
+	case Periodic4MPS:
+		switch precision {
+		case RepeatabilityLow:
+			cmd = CMD_PERIOD_MEASURE_4MPS_LOW
+		case RepeatabilityMedium:
+			cmd = CMD_PERIOD_MEASURE_4MPS_MEDIUM
+		case RepeatabilityHigh:
+			cmd = CMD_PERIOD_MEASURE_4MPS_HIGH
+		}
+	case Periodic10MPS:
+		switch precision {
+		case RepeatabilityLow:
+			cmd = CMD_PERIOD_MEASURE_10MPS_LOW
+		case RepeatabilityMedium:
+			cmd = CMD_PERIOD_MEASURE_10MPS_MEDIUM
+		case RepeatabilityHigh:
+			cmd = CMD_PERIOD_MEASURE_10MPS_HIGH
+		}
+	}
+
+	return cmd
 }
 
 // StartPeriodicTemperatureAndHumidityMeasure send command to the sensor
@@ -455,58 +522,13 @@ func (v *SHT3X) celsiusToUncompTemperature(celsius float32) uint16 {
 func (v *SHT3X) StartPeriodicTemperatureAndHumidityMeasure(i2c *i2c.I2C,
 	period PeriodicMeasure, precision MeasureRepeatability) error {
 
-	var cmd []byte
-	switch period {
-	case PERIODIC_05MPS:
-		switch precision {
-		case REPEATABILITY_LOW:
-			cmd = CMD_PERIOD_MEASURE_05MPS_LOW
-		case REPEATABILITY_MEDIUM:
-			cmd = CMD_PERIOD_MEASURE_05MPS_MEDIUM
-		case REPEATABILITY_HIGH:
-			cmd = CMD_PERIOD_MEASURE_05MPS_HIGH
-		}
-	case PERIODIC_1MPS:
-		switch precision {
-		case REPEATABILITY_LOW:
-			cmd = CMD_PERIOD_MEASURE_1MPS_LOW
-		case REPEATABILITY_MEDIUM:
-			cmd = CMD_PERIOD_MEASURE_1MPS_MEDIUM
-		case REPEATABILITY_HIGH:
-			cmd = CMD_PERIOD_MEASURE_1MPS_HIGH
-		}
-	case PERIODIC_2MPS:
-		switch precision {
-		case REPEATABILITY_LOW:
-			cmd = CMD_PERIOD_MEASURE_2MPS_LOW
-		case REPEATABILITY_MEDIUM:
-			cmd = CMD_PERIOD_MEASURE_2MPS_MEDIUM
-		case REPEATABILITY_HIGH:
-			cmd = CMD_PERIOD_MEASURE_2MPS_HIGH
-		}
-	case PERIODIC_4MPS:
-		switch precision {
-		case REPEATABILITY_LOW:
-			cmd = CMD_PERIOD_MEASURE_4MPS_LOW
-		case REPEATABILITY_MEDIUM:
-			cmd = CMD_PERIOD_MEASURE_4MPS_MEDIUM
-		case REPEATABILITY_HIGH:
-			cmd = CMD_PERIOD_MEASURE_4MPS_HIGH
-		}
-	case PERIODIC_10MPS:
-		switch precision {
-		case REPEATABILITY_LOW:
-			cmd = CMD_PERIOD_MEASURE_10MPS_LOW
-		case REPEATABILITY_MEDIUM:
-			cmd = CMD_PERIOD_MEASURE_10MPS_MEDIUM
-		case REPEATABILITY_HIGH:
-			cmd = CMD_PERIOD_MEASURE_10MPS_HIGH
-		}
-	}
+	cmd := v.getPeriodicMeasurementCommand(period, precision)
 	err := v.initiateMeasure(i2c, cmd, precision)
 	if err != nil {
 		return err
 	}
+	v.lastPeriodic = period
+	v.lastPrecision = precision
 
 	return nil
 }
@@ -515,22 +537,23 @@ func (v *SHT3X) StartPeriodicTemperatureAndHumidityMeasure(i2c *i2c.I2C,
 // return sensor to "single shot mode".
 func (v *SHT3X) Break(i2c *i2c.I2C) error {
 	lg.Debug("Interrupt periodic data acquisition mode...")
-	_, err := i2c.WriteBytes(CMD_BREAK)
+	cmd := CMD_BREAK
+	_, err := i2c.WriteBytes(cmd)
 	if err != nil {
 		return err
 	}
+	v.lastCmd = cmd
 	return nil
 }
 
-// FetchUncompTemperatureAndHumidityWithContext return
+// FetchUncompTemperatureAndHumidity return
 // uncompensated temperature and humidity obtained from sensor.
-func (v *SHT3X) FetchUncompTemperatureAndHumidity(i2c *i2c.I2C,
-	period PeriodicMeasure) (uint16, uint16, error) {
+func (v *SHT3X) FetchUncompTemperatureAndHumidity(i2c *i2c.I2C) (ut uint16, uh uint16, err error) {
 	// Create default context
 	ctx := context.Background()
 	// Reroute call
 	return v.FetchUncompTemperatureAndHumidityWithContext(ctx,
-		i2c, period)
+		i2c)
 }
 
 // FetchUncompTemperatureAndHumidityWithContext return
@@ -538,23 +561,27 @@ func (v *SHT3X) FetchUncompTemperatureAndHumidity(i2c *i2c.I2C,
 // Use context parameter, since operation is time consuming
 // (can take up to 2 seconds, waiting for results).
 func (v *SHT3X) FetchUncompTemperatureAndHumidityWithContext(parent context.Context,
-	i2c *i2c.I2C, period PeriodicMeasure) (uint16, uint16, error) {
+	i2c *i2c.I2C) (ut uint16, uh uint16, err error) {
 
-	_, err := i2c.WriteBytes(CMD_PERIOD_FETCH)
+	cmd := v.getPeriodicMeasurementCommand(v.lastPeriodic, v.lastPrecision)
+	if cmd == nil || !reflect.DeepEqual(cmd, v.lastCmd) {
+		return 0, 0, errors.New("Can't fetch measurement results, since no measurement initiated")
+	}
+	_, err = i2c.WriteBytes(CMD_PERIOD_FETCH)
 	if err != nil {
 		return 0, 0, err
 	}
 
 	done := make(chan struct{})
 	defer close(done)
-	// Create context with cancelation possibility.
+	// Create context with cancellation possibility.
 	ctx, cancel := context.WithCancel(parent)
-	// Run goroutine waiting for OS termantion events, including keyboard Ctrl+C.
+	// Run goroutine waiting for OS termination events, including keyboard Ctrl+C.
 	shell.CloseContextOnKillSignal(cancel, done)
 
 	retryCount := 5
 	var data []uint16
-	timeDur := period.GetDuration()
+	timeDur := v.lastPeriodic.GetWaitDuration()
 	first := true
 	for retryCount >= 0 {
 		data, err = v.readDataWithCRCCheck(i2c, 2)
@@ -588,31 +615,29 @@ func (v *SHT3X) FetchUncompTemperatureAndHumidityWithContext(parent context.Cont
 }
 
 // FetchTemperatureAndRelativeHumidity wait for uncompensated temperature
-// and humidity values and convert them to float values (celcius and related humidity).
-func (v *SHT3X) FetchTemperatureAndRelativeHumidity(i2c *i2c.I2C,
-	period PeriodicMeasure) (float32, float32, error) {
+// and humidity values and convert them to float values (Celsius and related humidity).
+func (v *SHT3X) FetchTemperatureAndRelativeHumidity(i2c *i2c.I2C) (temp float32, hum float32, err error) {
 	// Create default context
 	ctx := context.Background()
 	// Reroute call
-	return v.FetchTemperatureAndRelativeHumidityWithContext(ctx,
-		i2c, period)
+	return v.FetchTemperatureAndRelativeHumidityWithContext(ctx, i2c)
 }
 
 // FetchTemperatureAndRelativeHumidityWithContext wait for uncompensated temperature
-// and humidity values and convert them to float values (celcius and related humidity).
+// and humidity values and convert them to float values (Celsius and related humidity).
 // Use context parameter, since operation is time consuming
 // (can take up to 2 seconds, waiting for results).
 func (v *SHT3X) FetchTemperatureAndRelativeHumidityWithContext(parent context.Context,
-	i2c *i2c.I2C, period PeriodicMeasure) (float32, float32, error) {
+	i2c *i2c.I2C) (temp float32, hum float32, err error) {
 
-	ut, urh, err := v.FetchUncompTemperatureAndHumidityWithContext(parent, i2c, period)
+	ut, urh, err := v.FetchUncompTemperatureAndHumidityWithContext(parent, i2c)
 	if err != nil {
 		return 0, 0, err
 	}
 	lg.Debugf("Temperature and RH uncompensated = %v, %v", ut, urh)
-	temp := v.uncompTemperatureToCelsius(ut)
-	rh := v.uncompHumidityToRelativeHumidity(urh)
-	return temp, rh, nil
+	temp = v.uncompTemperatureToCelsius(ut)
+	hum = v.uncompHumidityToRelativeHumidity(urh)
+	return temp, hum, nil
 }
 
 // Read alert temperature and humidity limits from sensor.
@@ -621,6 +646,7 @@ func (v *SHT3X) readAlertData(i2c *i2c.I2C, cmd []byte) (float32, float32, error
 	if err != nil {
 		return 0, 0, err
 	}
+	v.lastCmd = cmd
 	data, err := v.readDataWithCRCCheck(i2c, 1)
 	if err != nil {
 		return 0, 0, err
@@ -649,6 +675,7 @@ func (v *SHT3X) writeAlertData(i2c *i2c.I2C, cmd []byte, temp, hum float32) erro
 	if err != nil {
 		return err
 	}
+	v.lastCmd = cmd
 	// No conversion time defined in docs for this command,
 	// but error thrown out, if no any pause provided.
 	time.Sleep(time.Millisecond * 1)
@@ -659,7 +686,7 @@ func (v *SHT3X) writeAlertData(i2c *i2c.I2C, cmd []byte, temp, hum float32) erro
 // ReadAlertHighSet read sensor alert HIGH SET limits
 // for temperature and humidity.
 func (v *SHT3X) ReadAlertHighSet(i2c *i2c.I2C) (float32, float32, error) {
-	lg.Debug("Getting allert HIGH SET limit...")
+	lg.Debug("Getting alert HIGH SET limit...")
 	temp, rh, err := v.readAlertData(i2c, CMD_ALERT_READ_HIGH_SET)
 	if err != nil {
 		return 0, 0, err
@@ -671,7 +698,7 @@ func (v *SHT3X) ReadAlertHighSet(i2c *i2c.I2C) (float32, float32, error) {
 // ReadAlertHighClear read sensor alert HIGH CLEAR limits
 // for temperature and humidity.
 func (v *SHT3X) ReadAlertHighClear(i2c *i2c.I2C) (float32, float32, error) {
-	lg.Debug("Getting allert HIGH CLEAR limit...")
+	lg.Debug("Getting alert HIGH CLEAR limit...")
 	temp, rh, err := v.readAlertData(i2c, CMD_ALERT_READ_HIGH_CLEAR)
 	if err != nil {
 		return 0, 0, err
@@ -683,7 +710,7 @@ func (v *SHT3X) ReadAlertHighClear(i2c *i2c.I2C) (float32, float32, error) {
 // ReadAlertLowClear read sensor alert LOW CLEAR limits
 // for temperature and humidity.
 func (v *SHT3X) ReadAlertLowClear(i2c *i2c.I2C) (float32, float32, error) {
-	lg.Debug("Getting allert LOW CLEAR limit...")
+	lg.Debug("Getting alert LOW CLEAR limit...")
 	temp, rh, err := v.readAlertData(i2c, CMD_ALERT_READ_LOW_CLEAR)
 	if err != nil {
 		return 0, 0, err
@@ -695,7 +722,7 @@ func (v *SHT3X) ReadAlertLowClear(i2c *i2c.I2C) (float32, float32, error) {
 // ReadAlertLowSet read sensor alert LOW SET limits
 // for temperature and humidity.
 func (v *SHT3X) ReadAlertLowSet(i2c *i2c.I2C) (float32, float32, error) {
-	lg.Debug("Getting allert LOW SET limit...")
+	lg.Debug("Getting alert LOW SET limit...")
 	temp, rh, err := v.readAlertData(i2c, CMD_ALERT_READ_LOW_SET)
 	if err != nil {
 		return 0, 0, err
@@ -707,7 +734,7 @@ func (v *SHT3X) ReadAlertLowSet(i2c *i2c.I2C) (float32, float32, error) {
 // WriteAlertHighSet write alert HIGH SET limits
 // for temperature and humidity to the sensor.
 func (v *SHT3X) WriteAlertHighSet(i2c *i2c.I2C, temp, hum float32) error {
-	lg.Debug("Setting allert HIGH SET limit...")
+	lg.Debug("Setting alert HIGH SET limit...")
 	err := v.writeAlertData(i2c, CMD_ALERT_WRITE_HIGH_SET, temp, hum)
 	if err != nil {
 		return err
@@ -719,7 +746,7 @@ func (v *SHT3X) WriteAlertHighSet(i2c *i2c.I2C, temp, hum float32) error {
 // WriteAlertHighClear write alert HIGH CLEAR limits
 // for temperature and humidity to the sensor.
 func (v *SHT3X) WriteAlertHighClear(i2c *i2c.I2C, temp, hum float32) error {
-	lg.Debug("Setting allert HIGH CLEAR limit...")
+	lg.Debug("Setting alert HIGH CLEAR limit...")
 	err := v.writeAlertData(i2c, CMD_ALERT_WRITE_HIGH_CLEAR, temp, hum)
 	if err != nil {
 		return err
@@ -731,7 +758,7 @@ func (v *SHT3X) WriteAlertHighClear(i2c *i2c.I2C, temp, hum float32) error {
 // WriteAlertLowClear write alert LOW CLEAR limits
 // for temperature and humidity to the sensor.
 func (v *SHT3X) WriteAlertLowClear(i2c *i2c.I2C, temp, hum float32) error {
-	lg.Debug("Setting allert LOW CLEAR limit...")
+	lg.Debug("Setting alert LOW CLEAR limit...")
 	err := v.writeAlertData(i2c, CMD_ALERT_WRITE_LOW_CLEAR, temp, hum)
 	if err != nil {
 		return err
@@ -743,7 +770,7 @@ func (v *SHT3X) WriteAlertLowClear(i2c *i2c.I2C, temp, hum float32) error {
 // WriteAlertLowSet write alert LOW SET limits
 // for temperature and humidity to the sensor.
 func (v *SHT3X) WriteAlertLowSet(i2c *i2c.I2C, temp, hum float32) error {
-	lg.Debug("Setting allert LOW SET limit...")
+	lg.Debug("Setting alert LOW SET limit...")
 	err := v.writeAlertData(i2c, CMD_ALERT_WRITE_LOW_SET, temp, hum)
 	if err != nil {
 		return err
