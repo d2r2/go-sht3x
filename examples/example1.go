@@ -74,13 +74,13 @@ func main() {
 	lg.Notify("**********************************************************************************************")
 	lg.Notify("*** Single shot measurement mode")
 	lg.Notify("**********************************************************************************************")
-	ut, urh, err := sensor.ReadUncompTemperatureAndHumidity(i2c, sht3x.REPEATABILITY_MEDIUM)
+	ut, urh, err := sensor.ReadUncompTemperatureAndHumidity(i2c, sht3x.RepeatabilityMedium)
 	if err != nil {
 		lg.Fatal(err)
 	}
-	lg.Infof("Temprature and RH uncompensated = %v, %v", ut, urh)
+	lg.Infof("Temperature and RH uncompensated = %v, %v", ut, urh)
 
-	temp, rh, err := sensor.ReadTemperatureAndRelativeHumidity(i2c, sht3x.REPEATABILITY_LOW)
+	temp, rh, err := sensor.ReadTemperatureAndRelativeHumidity(i2c, sht3x.RepeatabilityLow)
 	if err != nil {
 		lg.Fatal(err)
 	}
@@ -89,13 +89,12 @@ func main() {
 	lg.Notify("**********************************************************************************************")
 	lg.Notify("*** Periodic data acquisition mode ")
 	lg.Notify("**********************************************************************************************")
-	period := sht3x.PERIODIC_4MPS
-	err = sensor.StartPeriodicTemperatureAndHumidityMeasure(i2c, period, sht3x.REPEATABILITY_LOW)
+	err = sensor.StartPeriodicTemperatureAndHumidityMeasure(i2c, sht3x.Periodic4MPS, sht3x.RepeatabilityLow)
 	if err != nil {
 		lg.Fatal(err)
 	}
 	for i := 0; i < 5; i++ {
-		temp, rh, err := sensor.FetchTemperatureAndRelativeHumidityWithContext(context.Background(), i2c, period)
+		temp, rh, err := sensor.FetchTemperatureAndRelativeHumidity(i2c)
 		if err != nil {
 			lg.Fatal(err)
 		}
@@ -178,9 +177,9 @@ func main() {
 	lg.Notify("**********************************************************************************************")
 	done := make(chan struct{})
 	defer close(done)
-	// Create context with cancelation possibility.
+	// Create context with cancellation possibility.
 	ctx, cancel := context.WithCancel(context.Background())
-	// Run goroutine waiting for OS termantion events, including keyboard Ctrl+C.
+	// Run goroutine waiting for OS termination events, including keyboard Ctrl+C.
 	shell.CloseContextOnKillSignal(cancel, done)
 
 	err = sensor.SetHeaterStatus(i2c, true)
@@ -214,7 +213,7 @@ func main() {
 		lg.Fatal(err)
 	}
 	lg.Infof("Heater ON status = %v", hs)
-	temp, rh, err = sensor.ReadTemperatureAndRelativeHumidity(i2c, sht3x.REPEATABILITY_LOW)
+	temp, rh, err = sensor.ReadTemperatureAndRelativeHumidity(i2c, sht3x.RepeatabilityLow)
 	if err != nil {
 		lg.Fatal(err)
 	}
