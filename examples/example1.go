@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"syscall"
 	"time"
 
 	i2c "github.com/d2r2/go-i2c"
@@ -175,12 +177,18 @@ func main() {
 	lg.Notify("**********************************************************************************************")
 	lg.Notify("*** Activate heater for 10 secs and make a measurement ")
 	lg.Notify("**********************************************************************************************")
+	// create context with cancellation possibility
+	ctx, cancel := context.WithCancel(context.Background())
+	// use done channel as a trigger to exit from signal waiting goroutine
 	done := make(chan struct{})
 	defer close(done)
-	// Create context with cancellation possibility.
-	ctx, cancel := context.WithCancel(context.Background())
-	// Run goroutine waiting for OS termination events, including keyboard Ctrl+C.
-	shell.CloseContextOnKillSignal(cancel, done)
+	// build actual signal list to control
+	signals := []os.Signal{os.Kill, os.Interrupt}
+	if shell.IsLinuxMacOSFreeBSD() {
+		signals = append(signals, syscall.SIGTERM)
+	}
+	// run goroutine waiting for OS termination events, including keyboard Ctrl+C
+	shell.CloseContextOnSignals(cancel, done, signals...)
 
 	err = sensor.SetHeaterStatus(i2c, true)
 	if err != nil {
