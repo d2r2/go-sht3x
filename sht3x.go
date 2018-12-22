@@ -26,7 +26,9 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"os"
 	"reflect"
+	"syscall"
 	"time"
 
 	i2c "github.com/d2r2/go-i2c"
@@ -593,12 +595,18 @@ func (v *SHT3X) FetchUncompTemperatureAndHumidityWithContext(parent context.Cont
 		return 0, 0, err
 	}
 
-	done := make(chan struct{})
-	defer close(done)
 	// Create context with cancellation possibility.
 	ctx, cancel := context.WithCancel(parent)
-	// Run goroutine waiting for OS termination events, including keyboard Ctrl+C.
-	shell.CloseContextOnKillSignal(cancel, done)
+	// use done channel as a trigger to exit from signal waiting goroutine
+	done := make(chan struct{})
+	defer close(done)
+	// build actual signal list to control
+	signals := []os.Signal{os.Kill, os.Interrupt}
+	if shell.IsLinuxMacOSFreeBSD() {
+		signals = append(signals, syscall.SIGTERM)
+	}
+	// run goroutine waiting for OS termination events, including keyboard Ctrl+C.
+	shell.CloseContextOnSignals(cancel, done, signals...)
 
 	retryCount := 5
 	var data []uint16
